@@ -1,0 +1,47 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  linux-packages:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg xvfb
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: cargo test --manifest-path native/Cargo.toml
+      - run: npm run test:integration
+      - run: xvfb-run -a npm run test:e2e
+      - run: npm run package:linux
+      - name: Create checksums
+        run: sha256sum release/*.deb release/*.rpm > release/SHA256SUMS
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Library Tagger ${{ github.ref_name }}
+          body: |
+            First public release of Library Tagger.
+
+            Linux x86-64 packages:
+            - Debian/Ubuntu: download the `.deb` file.
+            - Fedora/RHEL/openSUSE: download the `.rpm` file.
+
+            Library Tagger keeps indexing local and contacts metadata providers only when a lookup is explicitly requested.
+          files: |
+            release/*.deb
+            release/*.rpm
+            release/SHA256SUMS
+          fail_on_unmatched_files: true
