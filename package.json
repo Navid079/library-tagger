@@ -1,0 +1,65 @@
+{
+  "name": "library-tagger",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A private, cross-platform music metadata manager and organizer",
+  "license": "UNLICENSED",
+  "desktopName": "library-tagger.desktop",
+  "homepage": "https://github.com/Navid079/library-tagger",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Navid079/library-tagger.git"
+  },
+  "author": {
+    "name": "Navid079",
+    "email": "Navid079@users.noreply.github.com"
+  },
+  "main": "out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "npm run typecheck && electron-vite build",
+    "lint": "oxlint src tests scripts electron.vite.config.ts vitest.config.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
+    "test": "vitest run",
+    "test:integration": "cargo build --manifest-path native/Cargo.toml && vitest run tests/native-roundtrip.test.ts",
+    "test:e2e": "npm run build && node scripts/electron-smoke.mjs",
+    "test:watch": "vitest",
+    "native:build": "cargo build --manifest-path native/Cargo.toml --release",
+    "package:linux": "node scripts/check-release-id.mjs && npm run native:build && npm run build && electron-builder --linux deb rpm --x64",
+    "package:linux:test": "npm run native:build && npm run build && electron-builder --linux deb rpm --x64 --config.appId=io.local.library-tagger",
+    "preview": "electron-vite preview"
+  },
+  "dependencies": {
+    "@tanstack/react-table": "9.2.4",
+    "@tanstack/react-virtual": "3.14.10",
+    "@untitledui/icons": "0.0.22",
+    "chokidar": "5.0.0",
+    "clsx": "2.1.1",
+    "lucide-react": "1.41.0",
+    "music-metadata": "11.15.0",
+    "react": "19.2.8",
+    "react-aria-components": "1.21.0",
+    "react-dom": "19.2.8",
+    "react-icons": "5.7.0",
+    "tailwind-merge": "3.6.0",
+    "zod": "4.5.4"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "4.3.3",
+    "@types/node": "26.4.1",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.7",
+    "@vitejs/plugin-react": "5.2.0",
+    "electron": "44.2.0",
+    "electron-builder": "26.15.3",
+    "electron-vite": "5.0.0",
+    "oxlint": "1.81.0",
+    "tailwindcss": "4.3.3",
+    "typescript": "7.0.2",
+    "vite": "7.3.6",
+    "vitest": "5.0.0"
+  },
+  "allowScripts": {
+    "electron@44.2.0": true
+  }
+}

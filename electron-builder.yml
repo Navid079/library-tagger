@@ -1,0 +1,40 @@
+appId: io.github.navid079.library-tagger
+productName: Library Tagger
+artifactName: ${productName}-${version}-${arch}.${ext}
+directories:
+  output: release
+files:
+  - out/**
+  - package.json
+  - THIRD_PARTY_NOTICES.md
+extraResources:
+  - from: native/target/release/library-tagger-core
+    to: bin/library-tagger-core
+    filter:
+      - library-tagger-core
+  - from: packaging/io.github.navid079.library-tagger.policy
+    to: policy/io.github.navid079.library-tagger.policy
+linux:
+  icon: build/icon.png
+  target:
+    - deb
+    - rpm
+  category: AudioVideo
+  executableName: library-tagger
+  syncDesktopName: true
+  desktop:
+    entry:
+      Name: Library Tagger
+      Comment: Manage and organize music metadata
+deb:
+  depends:
+    - policykit-1
+  afterInstall: packaging/after-install.sh
+  afterRemove: packaging/after-remove.sh
+rpm:
+  depends:
+    - polkit
+  afterInstall: packaging/after-install.sh
+  afterRemove: packaging/after-remove.sh
+extraMetadata:
+  main: out/main/index.js

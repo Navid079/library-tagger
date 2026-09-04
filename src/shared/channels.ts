@@ -1,0 +1,22 @@
+export const channels = {
+  librariesList: "libraries:list",
+  librariesChoose: "libraries:choose",
+  librariesRemove: "libraries:remove",
+  librariesRescan: "libraries:rescan",
+  tracksQuery: "tracks:query",
+  tracksDetails: "tracks:details",
+  tracksSave: "tracks:save",
+  lookupMetadata: "lookup:metadata",
+  lookupLyrics: "lookup:lyrics",
+  lookupFingerprint: "lookup:fingerprint",
+  lookupArtwork: "lookup:artwork",
+  organizePreview: "organize:preview",
+  organizeApply: "organize:apply",
+  organizeRecoverable: "organize:recoverable",
+  organizeResume: "organize:resume",
+  organizeUndo: "organize:undo",
+  settingsGet: "settings:get",
+  settingsSet: "settings:set",
+  jobsCancel: "jobs:cancel",
+  jobsEvent: "jobs:event"
+} as const;

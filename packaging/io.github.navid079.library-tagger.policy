@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN" "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<policyconfig>
+  <vendor>Library Tagger</vendor>
+  <action id="io.github.navid079.library-tagger.modify-protected-library">
+    <description>Modify protected music library files</description>
+    <message>Authentication is required to modify protected music library files</message>
+    <defaults><allow_any>no</allow_any><allow_inactive>no</allow_inactive><allow_active>auth_admin</allow_active></defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/lib/library-tagger/library-tagger-core</annotate>
+    <annotate key="org.freedesktop.policykit.exec.argv1">privileged</annotate>
+  </action>
+</policyconfig>

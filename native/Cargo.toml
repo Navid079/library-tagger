@@ -1,0 +1,18 @@
+[package]
+name = "library-tagger-core"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+
+[dependencies]
+anyhow = "1.0.102"
+base64 = "0.22.1"
+lofty = "0.25.1"
+rusty-chromaprint = "0.3.0"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.151"
+sha2 = "0.10.9"
+symphonia = { version = "0.6.1", features = ["all"] }
+
+[dev-dependencies]
+tempfile = "3.27.0"
