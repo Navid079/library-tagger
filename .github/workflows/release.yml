@@ -4,15 +4,31 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing version tag to build and publish (for example, v1.2.3)
+        required: true
+        type: string
 
 permissions:
   contents: write
 
+concurrency:
+  group: release-${{ inputs.tag || github.ref }}
+  cancel-in-progress: false
+
 jobs:
   linux-packages:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out release tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -20,6 +36,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - run: sudo apt-get update && sudo apt-get install -y ffmpeg xvfb
       - run: npm ci
+      - name: Verify tag matches package version
+        run: npm run release:check
       - run: npm run lint
       - run: npm run typecheck
       - run: cargo test --manifest-path native/Cargo.toml
@@ -28,18 +46,30 @@ jobs:
       - run: npm run package:linux
       - name: Create checksums
         run: sha256sum release/*.deb release/*.rpm > release/SHA256SUMS
+      - name: Retain packaged artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: library-tagger-${{ env.RELEASE_TAG }}-linux-x64
+          path: |
+            release/*.deb
+            release/*.rpm
+            release/SHA256SUMS
+          if-no-files-found: error
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
         with:
-          name: Library Tagger ${{ github.ref_name }}
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: Library Tagger ${{ env.RELEASE_TAG }}
           body: |
-            First public release of Library Tagger.
+            Library Tagger ${{ env.RELEASE_TAG }} for Linux x86-64.
 
-            Linux x86-64 packages:
             - Debian/Ubuntu: download the `.deb` file.
             - Fedora/RHEL/openSUSE: download the `.rpm` file.
+            - Verify downloads with `SHA256SUMS`.
 
             Library Tagger keeps indexing local and contacts metadata providers only when a lookup is explicitly requested.
+          prerelease: ${{ contains(env.RELEASE_TAG, '-') }}
+          make_latest: ${{ !contains(env.RELEASE_TAG, '-') }}
           files: |
             release/*.deb
             release/*.rpm
