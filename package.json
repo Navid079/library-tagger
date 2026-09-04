@@ -26,8 +26,8 @@
     "test:watch": "vitest",
     "native:build": "cargo build --manifest-path native/Cargo.toml --release",
     "release:check": "node scripts/check-release-version.mjs",
-    "package:linux": "node scripts/check-release-id.mjs && npm run native:build && npm run build && electron-builder --linux deb rpm --x64",
-    "package:linux:test": "npm run native:build && npm run build && electron-builder --linux deb rpm --x64 --config.appId=io.local.library-tagger",
+    "package:linux": "node scripts/check-release-id.mjs && npm run native:build && npm run build && electron-builder --linux deb rpm --x64 --publish never",
+    "package:linux:test": "npm run native:build && npm run build && electron-builder --linux deb rpm --x64 --config.appId=io.local.library-tagger --publish never",
     "preview": "electron-vite preview"
   },
   "dependencies": {
