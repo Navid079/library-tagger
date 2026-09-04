@@ -1,7 +1,7 @@
 use anyhow::{bail, Context, Result};
 use base64::{engine::general_purpose::{STANDARD as BASE64, URL_SAFE_NO_PAD}, Engine};
 use lofty::{
-    config::WriteOptions,
+	config::{ParseOptions, WriteOptions},
     file::{AudioFile, TaggedFileExt},
     picture::{MimeType, Picture, PictureType},
     prelude::{Accessor, ItemKey},
@@ -16,7 +16,7 @@ use symphonia::core::{audio::sample::Sample, codecs::audio::AudioDecoderOptions,
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct WriteRequest { path: PathBuf, patch: TagPatch }
+struct WriteRequest { path: PathBuf, patch: TagPatch, recovery_patch: Option<TagPatch> }
 
 #[derive(Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -123,13 +123,37 @@ fn write_tags() -> Result<()> {
     let mut input = String::new();
     io::stdin().take(10 * 1024 * 1024).read_to_string(&mut input)?;
     let request: WriteRequest = serde_json::from_str(&input).context("invalid write request")?;
-    let mut tagged = Probe::open(&request.path)?.read().context("unable to parse audio file")?;
+    let WriteRequest { path, patch, recovery_patch } = request;
+    let mut recovered = false;
+    let mut tagged = match Probe::open(&path)?.read() {
+        Ok(tagged) => tagged,
+        Err(error) => {
+            let recovery_patch = recovery_patch.context(format!("unable to parse audio file: {error}"))?;
+            // Recovery deliberately ignores the old tag payload. This lets us replace malformed
+            // frames (and tag-level read-only flags) without ever modifying the original file;
+            // the caller runs this command against an atomic working copy.
+            let options = ParseOptions::new().read_tags(false);
+            let mut tagged = Probe::open(&path)?.options(options).read().context("unable to recover audio stream from malformed metadata")?;
+            let tag_type = tagged.primary_tag_type();
+            tagged.clear();
+            tagged.insert_tag(Tag::new(tag_type));
+            apply_patch(tagged.primary_tag_mut().context("audio format has no writable primary tag")?, recovery_patch)?;
+            recovered = true;
+            tagged
+        }
+    };
     let tag_type = tagged.primary_tag_type();
     if tagged.primary_tag().is_none() { tagged.insert_tag(Tag::new(tag_type)); }
     let tag = tagged.primary_tag_mut().context("audio format has no writable primary tag")?;
-    apply_patch(tag, request.patch)?;
-    tagged.save_to_path(&request.path, WriteOptions::default()).context("unable to save tags")?;
-    Probe::open(&request.path)?.read().context("tagged file failed validation")?;
+    if !recovered { apply_patch(tag, patch)?; }
+    let mut write_options = WriteOptions::new().respect_read_only(false);
+    if recovered {
+        write_options = write_options
+            .remove_others(true)
+            .parse_options(ParseOptions::new().read_tags(false));
+    }
+    tagged.save_to_path(&path, write_options).context("unable to save tags")?;
+    Probe::open(&path)?.read().context("tagged file failed validation")?;
     Ok(())
 }
 

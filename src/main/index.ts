@@ -35,7 +35,7 @@ async function createWindow(): Promise<void> {
   const providers = new ProviderService(catalog);
   const privilege = createPrivilegeAdapter(window, staging);
   const organizer = new Organizer(catalog, privilege);
-  const writer = new TagWriter(privilege, staging, () => catalog!.listLibraries().map((library) => library.canonicalPath));
+  const writer = new TagWriter(privilege, staging, () => catalog!.listLibraries().map((library) => library.canonicalPath), coverCache);
   registerIpc(window, { catalog, scanner, providers, organizer, writer, jobs });
 
   if (process.env.ELECTRON_RENDERER_URL) await window.loadURL(process.env.ELECTRON_RENDERER_URL);
