@@ -1,6 +1,7 @@
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { mkdir, readFile } from "node:fs/promises";
-import { app, BrowserWindow, protocol } from "electron";
+import { app, BrowserWindow, net, protocol } from "electron";
 import { CatalogDatabase } from "./database";
 import { registerIpc } from "./ipc";
 import { JobManager } from "./jobs";
@@ -10,7 +11,7 @@ import { ProviderService } from "./providers";
 import { LibraryScanner } from "./scanner";
 import { TagWriter } from "./tag-writer";
 
-protocol.registerSchemesAsPrivileged([{ scheme: "media", privileges: { standard: true, secure: true, supportFetchAPI: false, corsEnabled: false } }]);
+protocol.registerSchemesAsPrivileged([{ scheme: "media", privileges: { standard: true, secure: true, supportFetchAPI: false, corsEnabled: false, stream: true } }]);
 
 let catalog: CatalogDatabase | undefined;
 let scanner: LibraryScanner | undefined;
@@ -47,9 +48,17 @@ app.whenReady().then(async () => {
   const coverCache = join(app.getPath("userData"), "cover-cache");
   protocol.handle("media", async (request) => {
     const url = new URL(request.url); const hash = url.pathname.replace(/^\//, "");
-    if (url.hostname !== "cover" || !/^[a-f0-9]{64}$/.test(hash)) return new Response("Not found", { status: 404 });
-    try { const bytes = await readFile(join(coverCache, hash)); const contentType = bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])) ? "image/png" : "image/jpeg"; return new Response(bytes, { headers: { "Content-Type": contentType, "Cache-Control": "private, max-age=31536000, immutable" } }); }
-    catch { return new Response("Not found", { status: 404 }); }
+    if (url.hostname === "cover" && /^[a-f0-9]{64}$/.test(hash)) {
+      try { const bytes = await readFile(join(coverCache, hash)); const contentType = bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])) ? "image/png" : "image/jpeg"; return new Response(bytes, { headers: { "Content-Type": contentType, "Cache-Control": "private, max-age=31536000, immutable" } }); }
+      catch { return new Response("Not found", { status: 404 }); }
+    }
+    if (url.hostname === "track" && /^\d+$/.test(hash)) {
+      const track = catalog?.getTrack(Number(hash));
+      if (!track?.available) return new Response("Not found", { status: 404 });
+      try { return await net.fetch(pathToFileURL(track.absolutePath).toString(), { headers: request.headers }); }
+      catch { return new Response("Unable to read audio", { status: 404 }); }
+    }
+    return new Response("Not found", { status: 404 });
   });
   await createWindow();
   app.on("activate", () => { if (BrowserWindow.getAllWindows().length === 0) void createWindow(); });

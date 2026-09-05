@@ -60,6 +60,29 @@ describe.runIf(enabled)("native real-format round trips", () => {
     expect(Object.values(metadata.native).flat().some((tag) => tag.id === "TCOP")).toBe(false);
   });
 
+  it("rebuilds a malformed ID3 tag without changing the audio stream", async () => {
+    const path = join(directory, "malformed-date.mp3");
+    execFileSync("ffmpeg", ["-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", "sine=frequency=659:duration=1", "-c:a", "libmp3lame", "-metadata", "date=today", path]);
+    const audioBefore = decodedAudioHash(path);
+    expect(() => execFileSync(core, ["write"], { input: JSON.stringify({ path, patch: { title: "Recovered" } }), stdio: "pipe" })).toThrow();
+    execFileSync(core, ["write"], { input: JSON.stringify({ path, patch: { title: "Recovered" }, recoveryPatch: { title: "Recovered", artists: ["Library Tagger"], album: "Rebuilt", date: null } }) });
+    const metadata = await parseFile(path);
+    expect(metadata.common).toMatchObject({ title: "Recovered", artist: "Library Tagger", album: "Rebuilt" });
+    expect(metadata.common.date).toBeUndefined();
+    expect(Object.keys(metadata.native)).toEqual(["ID3v2.4"]);
+    expect(decodedAudioHash(path)).toBe(audioBefore);
+  });
+
+  it("preserves cataloged fields when the service repairs malformed metadata", async () => {
+    const path = join(directory, "malformed-service.mp3");
+    execFileSync("ffmpeg", ["-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", "sine=frequency=784:duration=1", "-c:a", "libmp3lame", "-metadata", "title=Old title", "-metadata", "artist=Fixture artist", "-metadata", "album=Fixture album", "-metadata", "date=today", path]);
+    const info = await stat(path);
+    const track: TrackDetails = { id: 101, libraryId: 1, filename: "malformed-service.mp3", relativePath: "malformed-service.mp3", absolutePath: path, title: "Old title", artists: ["Fixture artist"], albumArtist: null, albumArtists: [], album: "Fixture album", trackNumber: null, trackTotal: null, discNumber: null, discTotal: null, date: "today", year: null, genres: [], composers: [], comment: null, identifiers: {}, embeddedLyrics: null, sidecarLyrics: null, advancedTags: [], durationMs: 1000, format: "mp3", writable: true, hasCover: false, coverUrl: null, lyrics: { embedded: false, sidecar: false, synchronized: false, instrumental: false }, available: true, error: null, size: info.size, modifiedMs: info.mtimeMs };
+    const privilege: PrivilegeAdapter = { available: () => false, execute: async () => { throw new Error("unexpected privilege request"); } };
+    await new TagWriter(privilege, join(directory, "staging"), () => [directory]).write(track, { title: "Recovered through service", expectedSize: info.size, expectedModifiedMs: info.mtimeMs });
+    expect((await parseFile(path)).common).toMatchObject({ title: "Recovered through service", artist: "Fixture artist", album: "Fixture album" });
+  });
+
   it("indexes a real library and reports tag, cover, and lyric state", async () => {
     const database = new CatalogDatabase(":memory:");
     const library = database.addLibrary("Fixtures", directory, directory);

@@ -24,14 +24,19 @@ import {
   ListMusic,
   LoaderCircle,
   LockKeyhole,
+  Pause,
+  Play,
   RefreshCw,
   Save,
   Search,
   Settings as SettingsIcon,
+  SkipBack,
+  SkipForward,
   Sparkles,
   Tags,
   Trash2,
   Undo2,
+  Volume2,
   X,
 } from "lucide-react";
 import type {
@@ -68,6 +73,7 @@ export function App(): ReactNode {
   const [organizeOpen, setOrganizeOpen] = useState(false);
   const [recoverable, setRecoverable] = useState<RecoverableOperation[]>([]);
   const [lastOperationId, setLastOperationId] = useState<string | null>(null);
+  const [playerRequest, setPlayerRequest] = useState<{ id: number; nonce: number } | null>(null);
 
   const refreshLibraries = useCallback(
     async () => setLibraries(await api.libraries.list()),
@@ -143,7 +149,7 @@ export function App(): ReactNode {
   );
 
   return (
-    <div className="grid h-full grid-cols-[240px_minmax(520px,1fr)_360px] grid-rows-[1fr_34px] bg-slate-50">
+    <div className="grid h-full grid-cols-[240px_minmax(520px,1fr)_360px] grid-rows-[1fr_68px] bg-slate-50">
       <aside className="row-start-1 flex min-h-0 flex-col border-r border-slate-200 bg-white">
         <div className="flex h-16 items-center gap-3 border-b border-slate-200 px-4">
           <span className="grid size-9 place-items-center rounded-xl bg-violet-600 text-white">
@@ -329,6 +335,10 @@ export function App(): ReactNode {
           loading={loading}
           onToggle={toggleSelected}
           onActivate={setActiveId}
+          onPlay={id => {
+            setActiveId(id);
+            setPlayerRequest(current => ({ id, nonce: (current?.nonce ?? 0) + 1 }));
+          }}
         />
         {tracks.length < total && (
           <div className="border-t border-slate-200 bg-white p-2 text-center">
@@ -359,12 +369,13 @@ export function App(): ReactNode {
           />
         )}
       </aside>
-      <footer className="col-span-3 row-start-2 flex items-center justify-between border-t border-slate-200 bg-white px-4 text-xs text-slate-500">
+      <footer className="col-span-3 row-start-2 grid grid-cols-[1fr_minmax(440px,2fr)_1fr] items-center border-t border-slate-200 bg-white px-4 text-xs text-slate-500">
         <span>
           {total.toLocaleString()} tracks · {libraries.length}{" "}
           {libraries.length === 1 ? "library" : "libraries"}
         </span>
-        <span className="flex items-center gap-2">
+        <Player tracks={tracks} activeId={activeId} request={playerRequest} onSelect={setActiveId} onError={value => setError(value)} />
+        <span className="flex items-center justify-end gap-2">
           {activeJobs.length > 0 && (
             <>
               <LoaderCircle className="size-3 animate-spin" />
@@ -431,6 +442,133 @@ export function App(): ReactNode {
   );
 }
 
+function Player({
+  tracks,
+  activeId,
+  request,
+  onSelect,
+  onError,
+}: {
+  tracks: TrackSummary[];
+  activeId: number | null;
+  request: { id: number; nonce: number } | null;
+  onSelect(id: number): void;
+  onError(error: string): void;
+}): ReactNode {
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const [currentTrack, setCurrentTrack] = useState<TrackSummary | null>(null);
+  const [playing, setPlaying] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [volume, setVolume] = useState(0.8);
+
+  useEffect(() => {
+    if (!request) return;
+    const requested = tracks.find(track => track.id === request.id);
+    if (!requested?.available) return;
+    setCurrentTrack(requested);
+    setElapsed(0);
+    setDuration(0);
+    setPlaying(true);
+  }, [request]);
+  useEffect(() => {
+    const refreshed = tracks.find(track => track.id === currentTrack?.id);
+    if (refreshed) setCurrentTrack(refreshed);
+  }, [tracks, currentTrack?.id]);
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    if (playing) void audio.play().catch(() => {
+      setPlaying(false);
+      onError("This audio format could not be played");
+    });
+    else audio.pause();
+  }, [currentTrack?.id, playing]);
+  useEffect(() => {
+    if (audioRef.current) audioRef.current.volume = volume;
+  }, [volume, currentTrack?.id]);
+
+  const choose = (track: TrackSummary): void => {
+    setCurrentTrack(track);
+    setElapsed(0);
+    setDuration(0);
+    setPlaying(true);
+    onSelect(track.id);
+  };
+  const move = (offset: -1 | 1): void => {
+    const playable = tracks.filter(track => track.available);
+    if (!playable.length) return;
+    const index = playable.findIndex(track => track.id === currentTrack?.id);
+    choose(playable[index < 0 ? 0 : (index + offset + playable.length) % playable.length]!);
+  };
+  const toggle = (): void => {
+    if (currentTrack) {
+      setPlaying(value => !value);
+      return;
+    }
+    const first = tracks.find(track => track.id === activeId && track.available) ?? tracks.find(track => track.available);
+    if (first) choose(first);
+  };
+
+  return (
+    <div className="grid min-w-0 grid-cols-[minmax(120px,1fr)_auto_minmax(150px,1fr)] items-center gap-3 px-4">
+      <div className="flex min-w-0 items-center gap-2">
+        <span className="grid size-10 shrink-0 place-items-center overflow-hidden rounded-lg bg-slate-100">
+          {currentTrack?.coverUrl ? <img src={currentTrack.coverUrl} className="size-full object-cover" /> : <MusicNote01 className="size-4 text-slate-400" />}
+        </span>
+        <span className="min-w-0">
+          <span className="block truncate text-xs font-semibold text-slate-800">{currentTrack?.title ?? currentTrack?.filename ?? "Nothing playing"}</span>
+          <span className="block truncate text-[11px] text-slate-400">{currentTrack?.artists.join(", ") || "Double-click a track to play"}</span>
+        </span>
+      </div>
+      <div className="flex items-center gap-1">
+        <button className="rounded-full p-2 text-slate-500 hover:bg-slate-100" onClick={() => move(-1)} aria-label="Previous track"><SkipBack className="size-4" /></button>
+        <button className="grid size-9 place-items-center rounded-full bg-violet-600 text-white hover:bg-violet-700" onClick={toggle} aria-label={playing ? "Pause" : "Play"}>
+          {playing ? <Pause className="size-4 fill-current" /> : <Play className="ml-0.5 size-4 fill-current" />}
+        </button>
+        <button className="rounded-full p-2 text-slate-500 hover:bg-slate-100" onClick={() => move(1)} aria-label="Next track"><SkipForward className="size-4" /></button>
+      </div>
+      <div className="flex min-w-0 items-center gap-2 tabular-nums">
+        <span className="w-8 text-right text-[10px]">{formatTime(elapsed)}</span>
+        <input
+          type="range"
+          min={0}
+          max={duration || 0}
+          step={0.1}
+          value={Math.min(elapsed, duration || 0)}
+          onChange={event => {
+            const next = Number(event.target.value);
+            if (audioRef.current) audioRef.current.currentTime = next;
+            setElapsed(next);
+          }}
+          className="min-w-20 flex-1 accent-violet-600"
+          aria-label="Playback position"
+        />
+        <span className="w-8 text-[10px]">{formatTime(duration)}</span>
+        <Volume2 className="ml-1 size-3.5" />
+        <input type="range" min={0} max={1} step={0.05} value={volume} onChange={event => setVolume(Number(event.target.value))} className="w-16 accent-violet-600" aria-label="Volume" />
+      </div>
+      {currentTrack && (
+        <audio
+          ref={audioRef}
+          src={`media://track/${currentTrack.id}`}
+          onLoadedMetadata={event => setDuration(Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : 0)}
+          onTimeUpdate={event => setElapsed(event.currentTarget.currentTime)}
+          onPlay={() => setPlaying(true)}
+          onPause={() => setPlaying(false)}
+          onEnded={() => move(1)}
+        />
+      )}
+    </div>
+  );
+}
+
+function formatTime(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds < 0) return "0:00";
+  const minutes = Math.floor(seconds / 60);
+  return `${minutes}:${Math.floor(seconds % 60).toString().padStart(2, "0")}`;
+}
+
 function LibraryButton({
   active,
   label,
@@ -475,6 +613,7 @@ function TrackTable({
   loading,
   onToggle,
   onActivate,
+  onPlay,
 }: {
   tracks: TrackSummary[];
   group: TrackQuery["group"];
@@ -483,6 +622,7 @@ function TrackTable({
   loading: boolean;
   onToggle(id: number): void;
   onActivate(id: number): void;
+  onPlay(id: number): void;
 }): ReactNode {
   const parentRef = useRef<HTMLDivElement>(null);
   const rows = useMemo(() => {
@@ -569,7 +709,7 @@ function TrackTable({
                 height: virtual.size,
                 transform: `translateY(${virtual.start}px)`,
               }}
-              onDoubleClick={() => onActivate(track.id)}
+              onDoubleClick={() => onPlay(track.id)}
             >
               <input
                 type="checkbox"

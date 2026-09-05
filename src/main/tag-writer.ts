@@ -47,7 +47,12 @@ export class TagWriter {
     await chmod(temporary, mode);
     if (ownership && process.platform !== "win32") await chown(temporary, ownership.uid, ownership.gid);
     try {
-      await run(corePath(), ["write"], JSON.stringify({ path: temporary, patch, recoveryPatch: await this.recoveryPatch(track, patch) }));
+      try {
+        await run(corePath(), ["write"], JSON.stringify({ path: temporary, patch }));
+      } catch (error) {
+        if (!isMalformedMetadataError(error)) throw error;
+        await run(corePath(), ["write"], JSON.stringify({ path: temporary, patch: {}, recoveryPatch: await this.recoveryPatch(track, patch) }));
+      }
       const result = await stat(temporary);
       if (!result.isFile() || result.size === 0) throw new Error("Tag writer produced an invalid file");
     } catch (error) { await unlink(temporary).catch(() => undefined); throw error; }
@@ -118,6 +123,10 @@ async function existingHash(path: string): Promise<string | null> {
 
 function isPermissionError(error: unknown): boolean {
   return error instanceof Error && ("code" in error && ((error as NodeJS.ErrnoException).code === "EACCES" || (error as NodeJS.ErrnoException).code === "EPERM"));
+}
+
+function isMalformedMetadataError(error: unknown): boolean {
+  return error instanceof Error && error.message.includes("unable to parse audio file");
 }
 
 function validDate(value: string | null): string | null {
